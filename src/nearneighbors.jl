@@ -4,7 +4,7 @@
 end
 
 @inline function CellGrid(d::Int, L, r₀)
-    indices = CartesianIndices((fill(-1:Int(fld(L,r₀)), d)...,))
+    indices = CartesianIndices((fill(-1:Int(floor(L/r₀)), d)...,))
     grid = Dict{CartesianIndex{d}, Vector{Int}}()
     for ci in indices
         grid[ci]=[]
