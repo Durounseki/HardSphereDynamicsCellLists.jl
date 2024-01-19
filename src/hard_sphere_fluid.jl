@@ -4,8 +4,7 @@ Hard sphere fluid in N dimensions
 mutable struct HardSphereFluid{N,T}
 	box::RectangularBox{N,T}
 	particles::Vector{Particle{N,T}}
-    cells::Dict{CartesianIndex{N}, Vector{Int64}}
-    cell_L::T
+    # cells::Dict{CartesianIndex{N}, Vector{Int64}}
 end
 
 
@@ -20,15 +19,14 @@ end
 
 
 
-function HardSphereFluid{N,T}(box::RectangularBox{N,T}, num_particles, r, cell_L) where {N,T}
+function HardSphereFluid{N,T}(box::RectangularBox{N,T}, num_particles, r) where {N,T} #We still need a better solution so that we can use box
 
 	particles = [Particle(zero(SVector{N,T}), zero(SVector{N,T}), r) for i in 1:num_particles]
     #Make a grid of the size of the maximum length
-    maxL = findmax([findmax(box.lower)[1],findmax(box.upper)[1]])[1]
-    cells = CellGrid(N, maxL, cell_L)
+    # maxL = findmax([findmax(box.lower)[1],findmax(box.upper)[1]])[1]
+    # cells = CellGrid(N, maxL, cell_L)
 
-	return HardSphereFluid{N,T}(box, particles, cells, cell_L) #This line throws an error, instead of creating a variable of type HardsphereFluid it tries to run the function with missmatching types of arguments.
-    #Let's try to move the cell_L property to box or declare the CellGrid as a struct
+	return HardSphereFluid{N,T}(box, particles)
 
 end
 

@@ -1,15 +1,15 @@
 abstract type AbstractFlowDynamics end
 
 
-function flow!(particles::Vector{<:Particle}, cells, cell_L, t, flow_type::AbstractFlowDynamics)
+function flow!(particles::Vector{<:Particle}, box::RectangularBox{N,T}, t, flow_type::AbstractFlowDynamics) where {N,T}
 	
     for particle in particles
 		flow!(particle, t, flow_type)
 	end
 
     #calculate new cell lists
-    emptyCells(cells)
-    CellList([p.x for p in particles],cell_L,cells)
+    emptyCells(box.cells)
+    CellList([p.x for p in particles],box)
 
 end
 

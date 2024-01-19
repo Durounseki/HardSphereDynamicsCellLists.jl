@@ -16,7 +16,7 @@ function AllToAll(fluid::HardSphereFluid{N,T}, flow_type) where {N,T}
 	return event_handler
 end
 
-function find_collision(::AllToAll, particles, box, cells, flow::AbstractFlowDynamics)
+function find_collision(::AllToAll, particles, box, flow::AbstractFlowDynamics)
 
 	partner1 = -1
 	partner2 = -1
@@ -37,7 +37,9 @@ function find_collision(::AllToAll, particles, box, cells, flow::AbstractFlowDyn
 	end
 
     #Calculate the next colliding pair of particles
-    i, j = nextCollidingPair(cells, particles)
+    i, j = nextCollidingPair(box.cells, particles)
+
+	# println(i,j)
 
     t = collision_time(particles[i], particles[j], flow)
 
@@ -53,7 +55,7 @@ function find_collision(::AllToAll, particles, box, cells, flow::AbstractFlowDyn
 end
 
 
-find_collision(event_handler, fluid::HardSphereFluid, flow_type) = find_collision(event_handler, fluid.particles, fluid.box, fluid.cells, flow_type)
+find_collision(event_handler, fluid::HardSphereFluid, flow_type) = find_collision(event_handler, fluid.particles, fluid.box, flow_type)
 
 
 function find_collision!(event_handler::AllToAll, fluid::HardSphereFluid, flow_type)

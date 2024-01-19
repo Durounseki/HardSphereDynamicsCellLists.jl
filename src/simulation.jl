@@ -37,7 +37,7 @@ place a disc at a time and check that it doesn't overlap with any previously pla
 
 Generates allowed ball positions and uniform velocities.
 """
-function initial_condition!(particles::Vector{Particle{N,T}}, table, cells, cell_L;
+function initial_condition!(particles::Vector{Particle{N,T}}, table;
 		lower=table.lower, upper=table.upper) where {N,T}
 
 	## TODO: Check that initial condition is OK with respect to planes
@@ -65,7 +65,7 @@ function initial_condition!(particles::Vector{Particle{N,T}}, table, cells, cell
     end
 
     #Generate initial cell lists
-    CellList([p.x for p in particles],cell_L,cells)
+    CellList([p.x for p in particles],table)
 
 
 
@@ -81,14 +81,14 @@ function initial_condition!(particles::Vector{Particle{N,T}}, table, cells, cell
     # end
 end
 
-initial_condition!(fluid::HardSphereFluid; kw...) = initial_condition!(fluid.particles, fluid.box, fluid.cells, fluid.cell_L;
+initial_condition!(fluid::HardSphereFluid; kw...) = initial_condition!(fluid.particles, fluid.box;
 	kw...)
 
 
 "Carry out collision assuming already at moment of collision"
 function collide!(fluid::HardSphereFluid, event_handler, collision_dynamics)
 
-	@unpack particles, box, cells = fluid
+	@unpack particles, box = fluid
 	@unpack partner1, partner2, collision_type = event_handler
 
 	if collision_type == :wall_collision
@@ -127,7 +127,7 @@ function evolve!(simulation::HardSphereSimulation{N,T}, num_collisions::Integer)
 
     for i in 1:num_collisions
 
-		flow!(fluid.particles, fluid.cell, fluid.cell_L, (event_handler.next_collision_time - simulation.current_time), flow_dynamics)
+		flow!(fluid.particles, fluid.box, (event_handler.next_collision_time - simulation.current_time), flow_dynamics)
 		simulation.current_time = event_handler.next_collision_time
 
 		push!(collision_types, event_handler.collision_type)
@@ -162,7 +162,7 @@ function flow!(simulation::HardSphereSimulation, t)
 	while t > time_to_next_collision
 		t -= time_to_next_collision
 
-		flow!(fluid.particles, fluid.cells, fluid.cell_L, time_to_next_collision, flow_dynamics)
+		flow!(fluid.particles, fluid.box, time_to_next_collision, flow_dynamics)
 		simulation.current_time += time_to_next_collision
 
 		collide!(fluid, event_handler, collision_dynamics)
@@ -172,7 +172,7 @@ function flow!(simulation::HardSphereSimulation, t)
 
 	end
 
-	flow!(fluid.particles, fluid.cells, fluid.cell_L, t, flow_dynamics)
+	flow!(fluid.particles, fluid.box, t, flow_dynamics)
 	simulation.current_time += t
 
 end

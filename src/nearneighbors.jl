@@ -3,8 +3,8 @@
     return n[1:fld(length(n), 2)]
 end
 
-@inline function CellGrid(d::Int, L, r₀)
-    indices = CartesianIndices((fill(-1:Int(floor(L/r₀)), d)...,))
+@inline function CellGrid(d::Int, Lmin, Lmax, r₀)
+    indices = CartesianIndices((fill((Int(floor(Lmin/r₀))-1):Int(floor(Lmax/r₀)), d)...,))
     grid = Dict{CartesianIndex{d}, Vector{Int}}()
     for ci in indices
         grid[ci]=[]
@@ -13,14 +13,14 @@ end
 end
 
 
-@inline function CellGrid(d::Int, Lx, Ly, r₀)
-    indices = [CartesianIndex(i,j) for i in -1:Int(floor(Lx/r₀)), j in -1:Int(floor(Ly/r₀))]
-    grid = Dict{CartesianIndex{d}, Vector{Int}}()
-    for ci in indices
-        grid[ci]=[]
-    end
-    return grid
-end
+# @inline function CellGrid(Lx, Ly, r₀)
+#     indices = [CartesianIndex(i,j) for i in -1:Int(floor(Lx/r₀)), j in -1:Int(floor(Ly/r₀))]
+#     grid = Dict{CartesianIndex{2}, Vector{Int}}()
+#     for ci in indices
+#         grid[ci]=[]
+#     end
+#     return grid
+# end
 
 """
 
@@ -33,10 +33,10 @@ Add the indices of particles contained in each cell to `cells[(i₁,i₂,...,i�
 
 """
 
-function CellList(positions, r₀, cells)
+function CellList(positions, box::RectangularBox{N,T}) where {N,T}
     n=length(positions)
     for i in 1:n
-        push!(cells[CartesianIndex(Int.(floor.(positions[i] ./ r₀))...)],i)
+        push!(box.cells[CartesianIndex(Int.(floor.(positions[i] ./ box.cell_L))...)],i)
         # push!(cells[CartesianIndex(Int(floor(P[i][1]/r₀)),Int(floor(P[i][2]/r₀)))],i)
     end
 end
@@ -181,36 +181,57 @@ function nextCollidingPair(cells, particles)
     partner2 = -1
 
     offsets = neighbors(length(particles[1].x))
-    # Iterate over non-empty cells
-    for (cell, indices) in cells
-        
-        # Pairs of points within the cell
-        if length(indices) < 2
-            r, i, j = nearestNeighbor!(particles,indices)
-        else
-            r = Inf
-            i = -1
-            j = -1
-            # If cell contains less than two particles, check for pairs of points in neighboring cells
-            for offset in offsets
-                neigh_cell = cell + offset
-                if haskey(cells, neigh_cell)
-                    @inbounds indices2 = cells[neigh_cell]
-                    #center_index = indices[1]
-                    r_temp, i_temp, j_temp = nearestNeighbor!(particles, indices[1], indices2)
-                    if r_temp < r
-                        r = r_temp
-                        i = i_temp
-                        j = j_temp
-                    end
+
+    #If all the cells contain a single particle, the system is probably dilute, or the cells are very small.
+    #In this case we could increase the size of the cell or we can try to iterate over all the pairs.
+    if findmax([length(i) for (c,i) in cells])[1] < 2
+
+        for i in 1:length(particles)
+            for j in i+1:length(particles)
+                r = norm(particles[i].x-particles[j].x)
+                if r < r_min
+                    r_min = r
+                    partner1 = i
+                    partner2 = j
                 end
             end
         end
 
-        if r < r_min
-            r_min = r
-            partner1 = i
-            partner2 = j
+    else
+        for (cell, indices) in cells
+            # Iterate over non-empty cells
+            if length(indices) > 0
+
+                # Pairs of points within the cell
+                if length(indices) > 1
+                    r, i, j = nearestNeighbor!(particles,indices)
+                else
+                    r = Inf
+                    i = -1
+                    j = -1
+                    # If cell contains less than two particles, check for pairs of points in neighboring cells
+                    for offset in offsets
+                        neigh_cell = cell + offset
+                        if haskey(cells, neigh_cell)
+                            @inbounds indices2 = cells[neigh_cell]
+                            #center_index = indices[1]
+                            r_temp, i_temp, j_temp = nearestNeighbor!(particles, indices[1], indices2)
+                            if r_temp < r
+                                r = r_temp
+                                i = i_temp
+                                j = j_temp
+                            end
+                        end
+                    end
+                end
+
+                if r < r_min
+                    r_min = r
+                    partner1 = i
+                    partner2 = j
+                end
+                
+            end
         end
     end
 
