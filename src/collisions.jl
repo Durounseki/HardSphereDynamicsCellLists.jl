@@ -3,18 +3,59 @@ abstract type AbstractCollisionDynamics end
 struct ElasticCollision <: AbstractCollisionDynamics end
 
 
+"""
 
-"Elastic collision of ball with Wall.
-The ball is assumed to be touching the Wall."
+Elastic collision of ball with Wall. The ball is assumed to be touching the Wall. The speed of the ball after the collision is modified according to a thermalization
+algorithm.
+
+`b`: particle in N dimensions with position x and velocity v.
+`Π`: fixed wall.
+`thermostat`: defines the type of thermalization algorithm after a particle collides with a wall.
+
+
+"""
 
 function collide!(b::Particle{N,T}, Π::Wall{N,T}, ::ElasticCollision) where {N,T}
+    
     v = b.v
-    #sample new speed from the maxwell boltzmann distribution
-    new_v = sqrt(MB_dist(Π.Temp)^2+MB_dist(Π.Temp)^2)
     n = Π.n
 
-    b.v = new_v*normalize(v - 2 * (v⋅n) * n)
+    b.v = v - 2 * (v⋅n) * n
+
+    b.c = :true
+
+    # if thermostat.algorithm == :isolated
+
+    #     b.v = v - 2 * (v⋅n) * n
+        
+    # elseif thermostat.algorithm == :mb_dist_sampling
+        
+    #     #Sample new speed from the maxwell boltzmann distribution
+    #     new_v = sqrt(MB_dist(thermostat.Temp)^2+MB_dist(thermostat.Temp)^2)
+    #     b.v = new_v*normalize(v - 2 * (v⋅n) * n)
+
+    # elseif thermostat.algorithm == :constant_sampling
+        
+    #     #Average kinetic energy = (d/2) * Temperature, with kB = 1
+    #     new_v = sqrt(length(b.v)*thermostat.Temp)
+    #     b.v = new_v*normalize(v - 2 * (v⋅n) * n)
+
+    # elseif thermostat.algorithm == :mb_normal
+
+    #     #Only the normal direction to the wall of the velocity is sampled from the Maxwell-Boltzmann distribution
+    #     b.v = v - ( (v⋅n) + MB_dist(thermostat.Temp) ) * n 
+    
+    # end
 end
+
+# function collide!(b::Particle{N,T}, Π::Wall{N,T}, ::ElasticCollision) where {N,T}
+#     v = b.v
+#     #sample new speed from the maxwell boltzmann distribution
+#     new_v = sqrt(MB_dist(Π.Temp)^2+MB_dist(Π.Temp)^2)
+#     n = Π.n
+
+#     b.v = new_v*normalize(v - 2 * (v⋅n) * n)
+# end
 
 
 "Assumes b1 and b2 are touching"

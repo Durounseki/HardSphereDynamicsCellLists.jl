@@ -27,6 +27,9 @@ include("hard_sphere_fluid.jl")
 # flow dynamics:
 include("flow.jl")
 
+# thermostat
+include("thermostat.jl")
+
 # simulation:
 include("collisions.jl")
 include("nearneighbors.jl")

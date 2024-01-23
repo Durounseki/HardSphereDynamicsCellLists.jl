@@ -3,18 +3,23 @@ mutable struct HardSphereSimulation{
     F<:HardSphereFluid{N,T},
     H<:AbstractEventHandler,
     L<:AbstractFlowDynamics,
-    C<:AbstractCollisionDynamics
+    C<:AbstractCollisionDynamics,
+	O<:AbstractThermostat,
+	R<:AbstractThermostat
 	}
 
     fluid::F
     event_handler::H
     flow_dynamics::L
     collision_dynamics::C
+	conduction_thermostat::O
+	radiation_thermostat::R
 	current_time::T
+
 end
 
-HardSphereSimulation(fluid::HardSphereFluid{N,T}, event_handler, flow_dynamics, collision_dynamics) where {N,T}=
-	HardSphereSimulation(fluid, event_handler, flow_dynamics, collision_dynamics, zero(T))
+HardSphereSimulation(fluid::HardSphereFluid{N,T}, event_handler, flow_dynamics, collision_dynamics, conduction_thermostat, radiation_thermostat) where {N,T}=
+	HardSphereSimulation(fluid, event_handler, flow_dynamics, collision_dynamics, conduction_thermostat, radiation_thermostat, zero(T))
 
 function normsq(v)
     return sum(abs2, v)
@@ -37,7 +42,7 @@ place a disc at a time and check that it doesn't overlap with any previously pla
 
 Generates allowed ball positions and uniform velocities.
 """
-function initial_condition!(particles::Vector{Particle{N,T}}, table;
+function initial_condition!(particles::Vector{Particle{N,T}}, table; equilibrium = :true,
 		lower=table.lower, upper=table.upper) where {N,T}
 
 	## TODO: Check that initial condition is OK with respect to planes
@@ -59,28 +64,27 @@ function initial_condition!(particles::Vector{Particle{N,T}}, table;
         end
     end
 
-    #Sample the components of the velocities from the Maxwell-Boltzmann distribution
-    for i = 1:length(particles)
-        particles[i].v = SA[MB_dist(table.Temp),MB_dist(table.Temp)]
-    end
+	if equilibrium
+		
+		#Sample the components of the velocities from the Maxwell-Boltzmann distribution
+    	for i = 1:length(particles)
+        	particles[i].v = SA[MB_dist(table.Temp),MB_dist(table.Temp)]
+    	end
+
+	else
+		
+		for i = 1:length(particles)
+        	particles[i].v = sqrt(N*table.Temp/particles[i].m)*normalize(@SVector randn(N))
+		end
+    
+	end
 
     #Generate initial cell lists
     CellList([p.x for p in particles],table)
 
-
-
-    # # generate velocities with sum(v_i^2) = 1:f
-    # for i = 1:length(particles)
-    #     particles[i].v = @SVector randn(N)
-    # end
-
-    # sumsq = sum(normsq(particles[i].v) for i = 1:length(particles))
-
-    # for i = 1:length(particles)
-    #     particles[i].v /= sqrt(sumsq)
-    # end
 end
 
+#Implementation of initial equilibrium condition missing
 initial_condition!(fluid::HardSphereFluid; kw...) = initial_condition!(fluid.particles, fluid.box;
 	kw...)
 
@@ -116,7 +120,7 @@ Returns post-collision states, times at which collisions occur, and collision ty
 """
 function evolve!(simulation::HardSphereSimulation{N,T}, num_collisions::Integer) where {N,T}
 
-	@unpack fluid, flow_dynamics, collision_dynamics, event_handler = simulation
+	@unpack fluid, flow_dynamics, collision_dynamics, event_handler, conduction_thermostat = simulation
 
     # positions = [ [ball.x for ball in particles] ]
 	# velocities = [ [ball.v for ball in particles] ]
@@ -154,7 +158,7 @@ account of possible collisions during that time.
 
 function flow!(simulation::HardSphereSimulation, t)
 
-	@unpack fluid, flow_dynamics, collision_dynamics, event_handler = simulation
+	@unpack fluid, flow_dynamics, collision_dynamics, event_handler, conduction_thermostat = simulation
 	# @unpack particles, table = fluid
 
 	time_to_next_collision = event_handler.next_collision_time - simulation.current_time
@@ -185,7 +189,7 @@ Time evolution, calculating positions and velocities at given times.
 """
 function evolve!(simulation::HardSphereSimulation{N,T}, times) where {N,T}
 
-	@unpack fluid, flow_dynamics, collision_dynamics, event_handler = simulation
+	@unpack fluid, flow_dynamics, collision_dynamics, event_handler, conduction_thermostat, radiation_thermostat = simulation
 
 	states = [deepcopy(fluid.particles)]
 	ts = [0.0]
@@ -194,6 +198,53 @@ function evolve!(simulation::HardSphereSimulation{N,T}, times) where {N,T}
 
 	for t in times
 		flow!(simulation, t - current_t)
+
+		#Thermalize the system through conduction
+		if conduction_thermostat.algorithm != :isolated
+			thermalize!(fluid.particles, conduction_thermostat)
+		end
+		#Thermalize the system through radiation
+		if radiation_thermostat.algorithm != :isolated
+			thermalize!(fluid.particles, radiation_thermostat, times[2]-times[1])
+		end
+		# if radiation_thermostat.algorithm == :v_scaling
+			
+		# 	T_state = sum([ p.m * normsq(p.v) for p in fluid.particles]) / (2*length(fluid.particles))
+
+		# 	for p in fluid.particles
+		# 		p.v *= sqrt( radiation_thermostat.Temp / T_state )
+		# 	end
+
+		# elseif radiation_thermostat.algorithm == :berendsen
+
+		# 	T_state = sum([ p.m * normsq(p.v) for p in fluid.particles]) / (2*length(fluid.particles))
+		# 	δt = times[2]-times[1]
+
+		# 	for p in fluid.particles
+		# 		p.v *= sqrt( 1 + ( δt / radiation_thermostat.τ ) * ( radiation_thermostat.Temp / T_state - 1 )  )
+		# 	end
+
+		# elseif radiation_thermostat.algorithm == :stochastic_v_scaling
+
+		# 	T_state = sum([ p.m * normsq(p.v) for p in fluid.partilces]) / (2*length(fluid.particles))
+		# 	T_bath = ( 2.0 / N ) * rand(Gamma( N / 2.0 , radiation_thermostat.Temp ) )#Sample from gamma with β = (1/radiation_thermostat.Temp)
+
+		# 	for p in fluid.particles
+		# 		p.v *= sqrt( T_bath / T_state )
+		# 	end
+
+		# elseif radiation_thermostat.algorithm == :b_d_p
+
+		# 	T_state = sum([ p.m * normsq(p.v) for p in fluid.partilces]) / (2*length(fluid.particles))
+		# 	T_bath = ( 2.0 / N ) * rand(Gamma( N / 2.0 , radiation_thermostat.Temp ))#Sample from gamma with β = (1/radiation_thermostat.Temp)
+
+		# 	for p in fluid.particles
+		# 		p.v *= sqrt( 1 + ( δt / radiation_thermostat.τ ) * ( T_bath / T_state - 1 )  )
+		# 	end
+
+		# end
+		#Implementation of Andersen and Nose-Hoover thermostats is missing
+
         push!(states, deepcopy(fluid.particles))
 		push!(ts, t)
 
