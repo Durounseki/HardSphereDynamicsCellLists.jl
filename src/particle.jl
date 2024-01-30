@@ -5,6 +5,7 @@ mutable struct Particle{N,T}
     r::T               # radius
     m::T               # mass
     c::Bool            # collision marker
+    # time_to_collision::Vector{Float64}
     # nn::Int            # next particle-particle collision
 end
 

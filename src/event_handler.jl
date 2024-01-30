@@ -5,18 +5,19 @@ mutable struct AllToAll{T} <: AbstractEventHandler
     partner1::Int
     partner2::Int
     collision_type::Symbol
+	pair_collision_times::Array{T,2}
 end
 
-AllToAll{T}() where {T} = AllToAll{T}(0, -1, -1, :none)
+AllToAll{T}(n) where {T} = AllToAll{T}(0, -1, -1, :none, [Inf for i in 1:n, j in 1:n])
 
 function AllToAll(fluid::HardSphereFluid{N,T}, flow_type) where {N,T}
-	event_handler = AllToAll{T}()
+	event_handler = AllToAll{T}(length(fluid.particles))
 	find_collision!(event_handler, fluid, flow_type)
 
 	return event_handler
 end
 
-function find_collision(::AllToAll, particles, box, flow::AbstractFlowDynamics)
+function find_collision(event_handler::AllToAll, particles, box, flow::AbstractFlowDynamics)
 
 	partner1 = -1
 	partner2 = -1
@@ -37,11 +38,7 @@ function find_collision(::AllToAll, particles, box, flow::AbstractFlowDynamics)
 	end
 
     #Calculate the next colliding pair of particles
-    i, j = nextCollidingPair(box.cells, particles)
-
-	# println(i,j)
-
-    t = collision_time(particles[i], particles[j], flow)
+    t, i, j = nextCollidingPair(box.cells, particles, flow, event_handler.pair_collision_times)
 
     if t < min_collision_time
         partner1 = i

@@ -123,6 +123,65 @@ returns the smallest distance between pairs of particles and their indices
     return r_min, partner1, partner2
 end
 
+##Collision time register
+
+# function pairCollisionTimes(N)
+
+#     collision_times = Dict{NTuple{N,Int},Float64}()
+#     for i in 1:N
+#         for j in 
+
+# end
+
+
+#Next colliding pair within one cell
+"""
+
+Calculate the nearest neighbour on one cell
+
+`particles`: collection of particles
+`indices`: denotes the particles contained in one cell
+
+returns the smallest distance between pairs of particles and their indices
+
+"""
+@inline function collidingPair!(particles::Vector{Particle{N,T}}, flow, indices, min_collision_times) where{N,T}
+    # min_collision_time = Inf
+    # partner1 = -1
+    # partner2 = -1
+    
+    for (k, i) in enumerate(indices[1:(end-1)])
+        for j in indices[(k+1):end]
+            min_collision_times[i,j] = min_collision_times[j,i] = collision_time(particles[i], particles[j], flow)
+        end
+
+        # times = [collision_time(particles[i], particles[j], flow) for j in indices[(k+1):end]]
+        # if length(times) > 0
+        #     # t, j = findmin(times)
+        #     push!(min_times,(findmin(times)...,i))
+        #     # particles[i].nppc = indices[j]
+        #     # particles[i].ttc = t
+        # end
+        # for j in indices[(k+1):end]
+
+        #     t = collision_time(particles[i], particles[j], flow)
+        #     # push!(collision_times,t)
+
+        #     if t < min_collision_time
+        #         partner1 = i
+        #         partner2 = j
+        #         min_collision_time = t
+        #     end
+
+        # end
+    end
+    # return t, j
+    # return min_collision_time, partner1, partner2
+end
+
+#####
+
+
 """
 
 If there are no more than one particle in one cell, calculate the nearest neighbour in the adjacent cells
@@ -147,6 +206,51 @@ returns the smallest distance between pairs of particles and their indices
     return r_min, center_index, partner
 end
 
+#Check for next colliding pair in neighboring cells
+
+"""
+
+If there are no more than one particle in one cell, calculate the nearest neighbour in the adjacent cells
+
+`particles`: collection of particles
+`center_index`: denotes the particle contained within the center cell
+`indices`: denotes the particles contained in the adjacent cells
+
+returns the smallest distance between pairs of particles and their indices
+
+"""
+@inline function collidingPair!(particles, flow, center_indices, indices, min_collision_times)
+    # min_collision_time = Inf
+    # partner1 = -1
+    # partner2 = -1
+    for i in center_indices
+        for j in indices
+            min_collision_times[i,j] = min_collision_times[j,i] = collision_time(particles[i], particles[j], flow)
+        end
+
+        # times = [collision_time(particles[i], particles[j], flow) for j in indices]
+        # if length(times) > 0
+        #     push!(min_times,(findmin(times)...,i))
+        #     # particles[i].nppc = indices[j]
+        #     # particles[i].ttc = t
+        # end
+        # for j in indices
+
+        #     collision_time(particles[i], particles[j], flow)
+
+        #     if t < min_collision_time
+        #         partner1 = i
+        #         partner2 = j
+        #         min_collision_time = t
+        #     end
+        # end    
+    end
+    # return center_index, partner
+    # return t, j
+end
+
+######
+
 function near_neighbors(cells, P, r₀, FRN, ds)
     offsets = neighbors(length(P[1]))
     # Iterate over non-empty cells
@@ -164,6 +268,9 @@ function near_neighbors(cells, P, r₀, FRN, ds)
     end
 end
 
+
+#Calculate next colliding pair
+
 """
 
 Calculate the pair of particles (i,j) with the smallest interparticle distance rᵢⱼ
@@ -174,7 +281,95 @@ Calculate the pair of particles (i,j) with the smallest interparticle distance r
 Returns the indices of the next colliding pair
 
 """
-function nextCollidingPair(cells, particles)
+function nextCollidingPair(cells, particles, flow, min_collision_times)
+    
+    # min_collision_time = Inf
+    # partner1 = -1
+    # partner2 = -1
+
+    offsets = neighbors(length(particles[1].x))
+
+    for (cell, center_indices) in cells
+        # Iterate over non-empty cells
+        if length(center_indices) > 0
+
+            # Check for next colliding pair within the same cell
+
+            collidingPair!(particles, flow, center_indices, min_collision_times)
+
+            # Check for next colliding pair in neighboring cells
+
+            for offset in offsets
+                neigh_cell = cell + offset
+                if haskey(cells, neigh_cell)
+                    @inbounds indices = cells[neigh_cell]
+                    collidingPair!(particles, flow, center_indices, indices, min_collision_times)
+                end
+            end
+        end
+    end
+
+    time_to_collision, pair = findmin(min_collision_times)
+
+    #If all the cells contain a single particle, the system is probably dilute, or the cells are very small.
+    #In this case we could increase the size of the cell or we can try to iterate over all the pairs.
+    # if findmax([length(i) for (c,i) in cells])[1] < 2
+
+    #     for i in 1:length(particles)
+    #         for j in i+1:length(particles)
+                
+    #             t = collision_time(particles[i], particles[j], flow)
+
+    #             if t < min_collision_time
+    #                 partner1 = i
+    #                 partner2 = j
+    #                 min_collision_time = t
+    #             end
+
+    #         end
+    #     end
+
+    # else
+    #     for (cell, center_indices) in cells
+    #         # Iterate over non-empty cells
+    #         if length(center_indices) > 0
+
+    #             # Check for next colliding pair within the same cell
+
+    #             collidingPair!(particles, flow, center_indices, min_collision_time, partner1, partner2)
+
+    #             # Check for next colliding pair in neighboring cells
+
+    #             for offset in offsets
+    #                 neigh_cell = cell + offset
+    #                 if haskey(cells, neigh_cell)
+    #                     @inbounds indices = cells[neigh_cell]
+    #                     collidingPair!(particles, flow, center_indices, indices, min_collision_time, partner1, partner2)
+    #                 end
+    #             end
+    #         end
+    #     end
+    # end
+
+    return time_to_collision, pair[1], pair[2]
+
+end
+
+
+######
+
+
+"""
+
+Calculate the pair of particles (i,j) with the smallest interparticle distance rᵢⱼ
+
+`particles`: collection of particles
+`cells`: dictionary of indices with cartesian indices as keys denoting the cells in the grid
+
+Returns the indices of the next colliding pair
+
+"""
+function nextCollidingPairOld(cells, particles)
     
     r_min = Inf
     partner1 = -1

@@ -193,6 +193,7 @@ function evolve!(simulation::HardSphereSimulation{N,T}, times) where {N,T}
 
 	states = [deepcopy(fluid.particles)]
 	ts = [0.0]
+	cell_lists = [deepcopy(fluid.box.cells)] 
 
 	current_t = 0.0
 
@@ -205,7 +206,7 @@ function evolve!(simulation::HardSphereSimulation{N,T}, times) where {N,T}
 		end
 		#Thermalize the system through radiation
 		if radiation_thermostat.algorithm != :isolated
-			thermalize!(fluid.particles, radiation_thermostat, times[2]-times[1])
+			thermalize!(fluid.particles, radiation_thermostat, Float64(times.step))
 		end
 		# if radiation_thermostat.algorithm == :v_scaling
 			
@@ -247,11 +248,12 @@ function evolve!(simulation::HardSphereSimulation{N,T}, times) where {N,T}
 
         push!(states, deepcopy(fluid.particles))
 		push!(ts, t)
+		push!(cell_lists, deepcopy(fluid.box.cells))
 
 		current_t = t
     end
 
-    return states, ts
+    return states, ts, cell_lists
 end
 
 

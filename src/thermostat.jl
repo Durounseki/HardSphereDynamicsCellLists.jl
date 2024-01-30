@@ -225,12 +225,35 @@ function thermalize!(particles::Vector{Particle{N,T}}, thermostat::RadiationTher
 
     elseif algorithm == :b_d_p
 
-        T_bath = ( 2.0 / N ) * rand(Gamma( N / 2.0 , Temp ))#Sample from gamma with β = (1/radiation_thermostat.Temp)
+        #Calculate the Kinetic energy
+        K_state = ( N / 2.0 ) * T_state
+        K_bath = ( N / 2.0 ) * Temp
+        Rs = [randn() for i in 1:N]
+
+        α = sqrt( exp(-δt / τ) + ( K_bath / (N * K_state) ) * (1-exp(-δt / τ)) * sum(Rs .^ 2) + 2 * exp(-δt / (2*τ)) * sqrt( ( K_bath / (N * K_state) ) * (1-exp(-δt / τ)) ) * Rs[1] )
+        # if (Rs[1] + sqrt(2 * K_bath / K_state * exp(-δt / τ) / (1-exp(-δt / τ))) ) < 0
+        #     α *= -1
+        # end
+        
+        #Conserved energy quantity
+        # H = K * ( 1 - α ^2 )
 
         for p in particles
-            p.v *= sqrt( 1 + ( δt / τ ) * ( T_bath / T_state - 1 )  )
+            p.v *= α
+        end
+
+    elseif algorithm == :andersen
+
+        for p in particles
+            
+            if rand() < ν*δt
+                p.v = SA[[MB_dist(Temp) for i in 1:N]...]
+                # p.v *=  norm(SA[[MB_dist(Temp) for i in 1:N]...]) / norm(p.v)
+                # p.c = :true
+            end
         end
 
     end
+
 end
 
