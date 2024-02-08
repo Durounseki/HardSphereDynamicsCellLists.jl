@@ -22,6 +22,7 @@ using Requires
 # types:
 include("particle.jl")
 include("box.jl")
+include("non_interacting_fluid.jl")
 include("hard_sphere_fluid.jl")
 
 # flow dynamics:
@@ -35,6 +36,7 @@ include("collisions.jl")
 include("nearneighbors.jl")
 include("event_handler.jl")
 include("simulation.jl")
+include("processes.jl")
 
 
 end # module

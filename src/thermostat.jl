@@ -247,8 +247,8 @@ function thermalize!(particles::Vector{Particle{N,T}}, thermostat::RadiationTher
         for p in particles
             
             if rand() < ν*δt
-                p.v = SA[[MB_dist(Temp) for i in 1:N]...]
-                # p.v *=  norm(SA[[MB_dist(Temp) for i in 1:N]...]) / norm(p.v)
+                # p.v = SA[[MB_dist(Temp) for i in 1:N]...]
+                p.v *=  norm(SA[[MB_dist(Temp) for i in 1:N]...]) / norm(p.v)
                 # p.c = :true
             end
         end

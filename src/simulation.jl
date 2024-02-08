@@ -1,6 +1,6 @@
-mutable struct HardSphereSimulation{
+mutable struct FluidSimulation{
     N, T,
-    F<:HardSphereFluid{N,T},
+    F<:AbstractFluid{N,T},
     H<:AbstractEventHandler,
     L<:AbstractFlowDynamics,
     C<:AbstractCollisionDynamics,
@@ -18,8 +18,31 @@ mutable struct HardSphereSimulation{
 
 end
 
-HardSphereSimulation(fluid::HardSphereFluid{N,T}, event_handler, flow_dynamics, collision_dynamics, conduction_thermostat, radiation_thermostat) where {N,T}=
-	HardSphereSimulation(fluid, event_handler, flow_dynamics, collision_dynamics, conduction_thermostat, radiation_thermostat, zero(T))
+function FluidSimulation(fluid::AbstractFluid{N,T}, event_handler, flow_dynamics, collision_dynamics, conduction_thermostat, radiation_thermostat) where {N,T}
+    FluidSimulation(fluid, event_handler, flow_dynamics, collision_dynamics, conduction_thermostat, radiation_thermostat, zero(T))
+end
+
+# mutable struct NonInteractingSimulation{
+# 	N,T,
+# 	F<:NonInteractingFluid{N,T},
+#     H<:AbstractEventHandler,
+#     L<:AbstractFlowDynamics,
+#     C<:AbstractCollisionDynamics,
+# 	O<:AbstractThermostat,
+# 	R<:AbstractThermostat
+# 	}
+# 	fluid::F
+#     event_handler::H
+#     flow_dynamics::L
+#     collision_dynamics::C
+# 	conduction_thermostat::O
+# 	radiation_thermostat::R
+# 	current_time::T
+# end
+
+# function NonInteractingSimulation(fluid::NonInteractingFluid{N,T}, event_handler, flow_dynamics, collision_dynamics, conduction_thermostat, radiation_thermostat) where {N,T}
+#     NonInteractingSimulation(fluid, event_handler, flow_dynamics, collision_dynamics, conduction_thermostat, radiation_thermostat, zero(T))
+# end
 
 function normsq(v)
     return sum(abs2, v)
@@ -42,7 +65,7 @@ place a disc at a time and check that it doesn't overlap with any previously pla
 
 Generates allowed ball positions and uniform velocities.
 """
-function initial_condition!(particles::Vector{Particle{N,T}}, table; equilibrium = :true,
+function initial_condition!(particles::Vector{Particle{N,T}}, table, fluid_type; equilibrium = :true,
 		lower=table.lower, upper=table.upper) where {N,T}
 
 	## TODO: Check that initial condition is OK with respect to planes
@@ -54,14 +77,17 @@ function initial_condition!(particles::Vector{Particle{N,T}}, table; equilibrium
         U = Uniform.(lower .+ particles[i].r, upper .- particles[i].r)
         particles[i].x = rand.(U)
 
-        count = 0
+		if fluid_type <: HardSphereFluid
+			count = 0
 
-        while overlap(particles[i], particles[1:i-1])
-            particles[i].x = rand.(U)
-            count += 1
+			while overlap(particles[i], particles[1:i-1])
+				particles[i].x = rand.(U)
+				count += 1
 
-            count > 10^5 && error("Unable to place disc $i")
-        end
+				count > 10^5 && error("Unable to place disc $i")
+			end
+		end
+
     end
 
 	if equilibrium
@@ -85,12 +111,10 @@ function initial_condition!(particles::Vector{Particle{N,T}}, table; equilibrium
 end
 
 #Implementation of initial equilibrium condition missing
-initial_condition!(fluid::HardSphereFluid; kw...) = initial_condition!(fluid.particles, fluid.box;
-	kw...)
-
+initial_condition!(fluid; kw...) = initial_condition!(fluid.particles, fluid.box, typeof(fluid); kw...)
 
 "Carry out collision assuming already at moment of collision"
-function collide!(fluid::HardSphereFluid, event_handler, collision_dynamics)
+function collide!(fluid::AbstractFluid, event_handler, collision_dynamics)
 
 	@unpack particles, box = fluid
 	@unpack partner1, partner2, collision_type = event_handler
@@ -107,6 +131,15 @@ function collide!(fluid::HardSphereFluid, event_handler, collision_dynamics)
 
 end
 
+# #Non Interacting gas collisions
+# "Carry out collision assuming already at moment of collision"
+# function collide!(fluid::NonInteractingFluid, event_handler, collision_dynamics)
+
+# 	@unpack particles, box = fluid
+# 	@unpack partner1, partner2, collision_type = event_handler
+
+# 	collide!(particles[partner1], box.walls[partner2], collision_dynamics)
+# end
 
 
 
@@ -118,12 +151,10 @@ Both sphere--sphere and sphere--wall collisions are counted as collisions.
 
 Returns post-collision states, times at which collisions occur, and collision types.
 """
-function evolve!(simulation::HardSphereSimulation{N,T}, num_collisions::Integer) where {N,T}
+function evolve!(simulation::FluidSimulation{N,T}, num_collisions::Integer) where {N,T}
 
-	@unpack fluid, flow_dynamics, collision_dynamics, event_handler, conduction_thermostat = simulation
+	@unpack fluid, flow_dynamics, collision_dynamics, event_handler = simulation
 
-    # positions = [ [ball.x for ball in particles] ]
-	# velocities = [ [ball.v for ball in particles] ]
 	states = [deepcopy(fluid.particles)]
 	times = [0.0]
 	collision_types = [:none]
@@ -156,7 +187,7 @@ Update hard sphere fluid by flowing for a time `t`, taking
 account of possible collisions during that time.
 """
 
-function flow!(simulation::HardSphereSimulation, t)
+function flow!(simulation::FluidSimulation, t)
 
 	@unpack fluid, flow_dynamics, collision_dynamics, event_handler, conduction_thermostat = simulation
 	# @unpack particles, table = fluid
@@ -187,13 +218,13 @@ end
 
 Time evolution, calculating positions and velocities at given times.
 """
-function evolve!(simulation::HardSphereSimulation{N,T}, times) where {N,T}
+function evolve!(simulation::FluidSimulation{N,T}, times) where {N,T}
 
 	@unpack fluid, flow_dynamics, collision_dynamics, event_handler, conduction_thermostat, radiation_thermostat = simulation
 
-	states = [deepcopy(fluid.particles)]
-	ts = [0.0]
-	cell_lists = [deepcopy(fluid.box.cells)] 
+	# states = [deepcopy(fluid.particles)]
+	# ts = [0.0]
+	# cell_lists = [deepcopy(fluid.box.cells)] 
 
 	current_t = 0.0
 
@@ -208,52 +239,15 @@ function evolve!(simulation::HardSphereSimulation{N,T}, times) where {N,T}
 		if radiation_thermostat.algorithm != :isolated
 			thermalize!(fluid.particles, radiation_thermostat, Float64(times.step))
 		end
-		# if radiation_thermostat.algorithm == :v_scaling
-			
-		# 	T_state = sum([ p.m * normsq(p.v) for p in fluid.particles]) / (2*length(fluid.particles))
 
-		# 	for p in fluid.particles
-		# 		p.v *= sqrt( radiation_thermostat.Temp / T_state )
-		# 	end
-
-		# elseif radiation_thermostat.algorithm == :berendsen
-
-		# 	T_state = sum([ p.m * normsq(p.v) for p in fluid.particles]) / (2*length(fluid.particles))
-		# 	δt = times[2]-times[1]
-
-		# 	for p in fluid.particles
-		# 		p.v *= sqrt( 1 + ( δt / radiation_thermostat.τ ) * ( radiation_thermostat.Temp / T_state - 1 )  )
-		# 	end
-
-		# elseif radiation_thermostat.algorithm == :stochastic_v_scaling
-
-		# 	T_state = sum([ p.m * normsq(p.v) for p in fluid.partilces]) / (2*length(fluid.particles))
-		# 	T_bath = ( 2.0 / N ) * rand(Gamma( N / 2.0 , radiation_thermostat.Temp ) )#Sample from gamma with β = (1/radiation_thermostat.Temp)
-
-		# 	for p in fluid.particles
-		# 		p.v *= sqrt( T_bath / T_state )
-		# 	end
-
-		# elseif radiation_thermostat.algorithm == :b_d_p
-
-		# 	T_state = sum([ p.m * normsq(p.v) for p in fluid.partilces]) / (2*length(fluid.particles))
-		# 	T_bath = ( 2.0 / N ) * rand(Gamma( N / 2.0 , radiation_thermostat.Temp ))#Sample from gamma with β = (1/radiation_thermostat.Temp)
-
-		# 	for p in fluid.particles
-		# 		p.v *= sqrt( 1 + ( δt / radiation_thermostat.τ ) * ( T_bath / T_state - 1 )  )
-		# 	end
-
-		# end
-		#Implementation of Andersen and Nose-Hoover thermostats is missing
-
-        push!(states, deepcopy(fluid.particles))
-		push!(ts, t)
-		push!(cell_lists, deepcopy(fluid.box.cells))
+        # push!(states, deepcopy(fluid.particles))
+		# push!(ts, t)
+		# push!(cell_lists, deepcopy(fluid.box.cells))
 
 		current_t = t
     end
 
-    return states, ts, cell_lists
+    # return states, ts, cell_lists
 end
 
 
@@ -264,4 +258,5 @@ Calculate positions and velocities at times up to `final_time`,
 spaced by `δt`.
 
 """
-evolve!(simulation::HardSphereSimulation, δt, final_time) = evolve!(simulation, δt:δt:final_time)
+evolve!(simulation::FluidSimulation, δt, final_time) = evolve!(simulation, δt:δt:final_time)
+

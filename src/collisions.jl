@@ -24,45 +24,16 @@ function collide!(b::Particle{N,T}, Π::Wall{N,T}, ::ElasticCollision) where {N,
 
     b.c = :true
 
-    # if thermostat.algorithm == :isolated
+    b.col_time = Inf
+    b.col_pair = -1
+    b.col_type = :none
 
-    #     b.v = v - 2 * (v⋅n) * n
-        
-    # elseif thermostat.algorithm == :mb_dist_sampling
-        
-    #     #Sample new speed from the maxwell boltzmann distribution
-    #     new_v = sqrt(MB_dist(thermostat.Temp)^2+MB_dist(thermostat.Temp)^2)
-    #     b.v = new_v*normalize(v - 2 * (v⋅n) * n)
-
-    # elseif thermostat.algorithm == :constant_sampling
-        
-    #     #Average kinetic energy = (d/2) * Temperature, with kB = 1
-    #     new_v = sqrt(length(b.v)*thermostat.Temp)
-    #     b.v = new_v*normalize(v - 2 * (v⋅n) * n)
-
-    # elseif thermostat.algorithm == :mb_normal
-
-    #     #Only the normal direction to the wall of the velocity is sampled from the Maxwell-Boltzmann distribution
-    #     b.v = v - ( (v⋅n) + MB_dist(thermostat.Temp) ) * n 
-    
-    # end
 end
-
-# function collide!(b::Particle{N,T}, Π::Wall{N,T}, ::ElasticCollision) where {N,T}
-#     v = b.v
-#     #sample new speed from the maxwell boltzmann distribution
-#     new_v = sqrt(MB_dist(Π.Temp)^2+MB_dist(Π.Temp)^2)
-#     n = Π.n
-
-#     b.v = new_v*normalize(v - 2 * (v⋅n) * n)
-# end
 
 
 "Assumes b1 and b2 are touching"
 function collide!(b1::Particle, b2::Particle, ::ElasticCollision)
     Δx = b1.x - b2.x
-
-    # @show norm(Δx)
 
     v1 = b1.v
     v2 = b2.v
@@ -91,6 +62,13 @@ function collide!(b1::Particle, b2::Particle, ::ElasticCollision)
 
     b1.v = v1′
     b2.v = v2′
+
+    b1.col_time = Inf
+    b1.col_pair = -1
+    b1.col_type = :none
+    b2.col_time = Inf
+    b2.col_pair = -1
+    b2.col_type = :none
 
 end
 
